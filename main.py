@@ -3,8 +3,50 @@ from datetime import datetime
 from collections import defaultdict
 import calendar
 
+# --- LT lokalizacija ir šriftai ---
+LT_MONTHS = [
+    "Sausis","Vasaris","Kovas","Balandis","Gegužė","Birželis",
+    "Liepa","Rugpjūtis","Rugsėjis","Spalis","Lapkritis","Gruodis"
+]
+LT_WEEKDAYS = [
+    "Pirmadienis","Antradienis","Trečiadienis",
+    "Ketvirtadienis","Penktadienis","Šeštadienis","Sekmadienis"
+]
+
+def register_pdf_fonts():
+    """Registruoja Unicode šriftus PDF’ui, kad neliktų juodų kvadratų."""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+
+    candidates = [
+        # projektinėje aplinkoje
+        ("DejaVuSans", "DejaVuSans.ttf"),
+        ("DejaVuSans-Bold", "DejaVuSans-Bold.ttf"),
+        # tipinės Linux/Mac lokacijos
+        ("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ( "ArialUnicodeMS", "/Library/Fonts/Arial Unicode.ttf"),
+        ( "ArialUnicodeMS-Bold", "/Library/Fonts/Arial Unicode Bold.ttf"),
+    ]
+
+    found = {}
+    for name, path in candidates:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont(name, path))
+                found[name] = True
+            except Exception:
+                pass
+
+    # Pasirink šrifto vardus, kurie tikrai užsiregistravo
+    base = "DejaVuSans" if "DejaVuSans" in found else ("ArialUnicodeMS" if "ArialUnicodeMS" in found else "Helvetica")
+    bold = "DejaVuSans-Bold" if "DejaVuSans-Bold" in found else ("ArialUnicodeMS-Bold" if "ArialUnicodeMS-Bold" in found else "Helvetica-Bold")
+    return base, bold
+
+
 def load_attendance(filename="attendance.txt"):
-    """Load attendance records from file."""
+    """Įkelia lankomumo įrašus iš failo."""
     attendance = {}
     if os.path.exists(filename):
         with open(filename, 'r') as f:
@@ -12,38 +54,38 @@ def load_attendance(filename="attendance.txt"):
                 line = line.strip()
                 if line:
                     date, status = line.split(',')
-                    attendance[date] = status.lower() == 'yes'
+                    attendance[date] = status.lower() == 'taip'
     return attendance
 
 def save_attendance(attendance, filename="attendance.txt"):
-    """Save attendance records to file."""
+    """Išsaugo lankomumo įrašus į failą."""
     with open(filename, 'w') as f:
         for date, status in sorted(attendance.items()):
-            f.write(f"{date},{'yes' if status else 'no'}\n")
+            f.write(f"{date},{'taip' if status else 'ne'}\n")
 
 def add_record(attendance):
-    """Add a new attendance record."""
-    date_str = input("Enter date (YYYY-MM-DD): ").strip()
+    """Prideda naują lankomumo įrašą."""
+    date_str = input("Įveskite datą (YYYY-MM-DD): ").strip()
     
-    # Validate date format
+    # Patikrina datos formatą
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
     except ValueError:
-        print("Invalid date format! Please use YYYY-MM-DD")
+        print("Neteisingas datos formatas! Naudokite YYYY-MM-DD")
         return
     
-    status = input("Was Rokas Šipkauskas present? (yes/no): ").strip().lower()
+    status = input("Ar Rokas Šipkauskas buvo treniruotėje? (taip/ne): ").strip().lower()
     
-    if status not in ['yes', 'no']:
-        print("Please enter 'yes' or 'no'")
+    if status not in ['taip', 'ne']:
+        print("Prašome įvesti 'taip' arba 'ne'")
         return
     
-    attendance[date_str] = (status == 'yes')
+    attendance[date_str] = (status == 'taip')
     save_attendance(attendance)
-    print(f"✓ Record added for {date_str}")
+    print(f"✓ Įrašas pridėtas {date_str}")
 
 def generate_pdf_report(attendance):
-    """Generate a PDF report for a specific month and year."""
+    """Sugeneruoja PDF ataskaitą konkrečiam mėnesiui ir metams (su Calibri šriftu)."""
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
@@ -51,67 +93,108 @@ def generate_pdf_report(attendance):
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
         import matplotlib.pyplot as plt
-        import io
+        import matplotlib
+        import io, os
     except ImportError:
-        print("\n⚠ Missing required libraries!")
-        print("Please install: pip install reportlab matplotlib")
+        print("\n⚠ Trūksta reikalingų bibliotekų!")
+        print("Įdiekite: pip install reportlab matplotlib")
         return
-    
-    year = input("Enter year (YYYY): ").strip()
-    month = input("Enter month (MM): ").strip()
-    
+
+    # --- Šriftų registracija (Calibri + fallback į DejaVu Sans) ---
+    calibri_paths = [
+        "calibri.ttf", "calibrib.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Calibri.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/calibrib.ttf",
+        "/Library/Fonts/Calibri.ttf",
+        "/Library/Fonts/Calibri Bold.ttf",
+        "C:\\Windows\\Fonts\\calibri.ttf",
+        "C:\\Windows\\Fonts\\calibrib.ttf",
+    ]
+
+    found_font = None
+    found_bold = None
+    for path in calibri_paths:
+        if os.path.exists(path):
+            if "bold" in path.lower() or path.lower().endswith("b.ttf"):
+                found_bold = path
+            else:
+                found_font = path
+
+    if found_font and found_bold:
+        pdfmetrics.registerFont(TTFont("Calibri", found_font))
+        pdfmetrics.registerFont(TTFont("Calibri-Bold", found_bold))
+        base_font, bold_font = "Calibri", "Calibri-Bold"
+    else:
+        from reportlab.pdfbase.ttfonts import TTFont
+        pdfmetrics.registerFont(TTFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
+        base_font, bold_font = "DejaVuSans", "DejaVuSans-Bold"
+
+    matplotlib.rcParams['font.family'] = base_font
+
+    # --- Lietuviški pavadinimai ---
+    LT_MONTHS = [
+        "Sausis","Vasaris","Kovas","Balandis","Gegužė","Birželis",
+        "Liepa","Rugpjūtis","Rugsėjis","Spalis","Lapkritis","Gruodis"
+    ]
+    LT_WEEKDAYS = [
+        "Pirmadienis","Antradienis","Trečiadienis",
+        "Ketvirtadienis","Penktadienis","Šeštadienis","Sekmadienis"
+    ]
+
+    # --- Įvedimas ---
+    year = input("Įveskite metus (YYYY): ").strip()
+    month = input("Įveskite mėnesį (MM): ").strip()
+
     try:
         year = int(year)
         month = int(month)
         if month < 1 or month > 12:
             raise ValueError
     except ValueError:
-        print("Invalid year or month!")
+        print("Neteisingi metai arba mėnuo!")
         return
-    
-    # Filter records for the selected month
+
+    # --- Filtruojame įrašus ---
     month_records = {}
     for date_str, status in attendance.items():
         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
         if date_obj.year == year and date_obj.month == month:
             month_records[date_str] = status
-    
+
     if not month_records:
-        print(f"No records found for {year}-{month:02d}")
+        print(f"Nerasta įrašų {year}-{month:02d}")
         return
-    
-    # Calculate statistics
+
     total_trainings = len(month_records)
     attended = sum(1 for status in month_records.values() if status)
     attendance_rate = (attended / total_trainings * 100) if total_trainings > 0 else 0
-    
-    # Calculate weekday statistics
+
     weekday_stats = defaultdict(lambda: {'attended': 0, 'total': 0})
     for date_str, status in month_records.items():
         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        weekday = calendar.day_name[date_obj.weekday()]
-        weekday_stats[weekday]['total'] += 1
+        wd_idx = date_obj.weekday()
+        weekday_stats[wd_idx]['total'] += 1
         if status:
-            weekday_stats[weekday]['attended'] += 1
-    
-    # Create PDF
-    filename = f"attendance_report_{year}_{month:02d}.pdf"
-    
-    # Check if file is open
+            weekday_stats[wd_idx]['attended'] += 1
+
+    filename = f"lankomumo_ataskaita_{year}_{month:02d}.pdf"
+
     try:
         with open(filename, 'a'):
             pass
     except PermissionError:
-        print(f"\n⚠ Error: {filename} is currently open in another program.")
-        print("Please close the file and try again.")
+        print(f"\n⚠ Klaida: {filename} šiuo metu atidarytas.")
         return
-    
+
+    # --- PDF kūrimas ---
     doc = SimpleDocTemplate(filename, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
     elements = []
     styles = getSampleStyleSheet()
-    
-    # Title
+
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -119,182 +202,137 @@ def generate_pdf_report(attendance):
         textColor=colors.black,
         spaceAfter=8,
         alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
+        fontName=bold_font
     )
-    title = Paragraph(f"Training Attendance Report – {calendar.month_name[month]} {year}", title_style)
+    title = Paragraph(f"Treniruotės lankomumo ataskaita – {LT_MONTHS[month-1]} {year}", title_style)
     elements.append(title)
-    
-    # Person name in red
+
     name_style = ParagraphStyle(
         'RedName',
         parent=styles['Heading2'],
         fontSize=14,
         textColor=colors.red,
         alignment=TA_CENTER,
-        fontName='Helvetica-Bold',
+        fontName=bold_font,
         spaceAfter=20
     )
-    name = Paragraph("Rokas Šipkauskas", name_style)
-    elements.append(name)
-    
-    # Summary statistics table - cyan header
+    elements.append(Paragraph("Rokas Šipkauskas", name_style))
+
+    # --- Santrauka ---
     summary_data = [
-        ['Metric', 'Data'],
-        ['Total Trainings', str(total_trainings)],
-        ['Attended', str(attended)],
-        ['Missed', str(total_trainings - attended)],
-        ['Attendance Rate', f"{attendance_rate:.1f}%"]
+        ['Rodiklis', 'Duomenys'],
+        ['Viso treniruočių', str(total_trainings)],
+        ['Dalyvauta', str(attended)],
+        ['Praleista', str(total_trainings - attended)],
+        ['Lankomumo procentas', f"{attendance_rate:.1f}%"]
     ]
-    
     summary_table = Table(summary_data, colWidths=[3*inch, 2.5*inch])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.cyan),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), bold_font),
+        ('FONTNAME', (0, 1), (-1, -1), base_font),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(summary_table)
     elements.append(Spacer(1, 0.3*inch))
-    
-    # Attendance by Weekday heading
+
     weekday_heading_style = ParagraphStyle(
-        'WeekdayHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.black,
-        fontName='Helvetica-Bold',
-        spaceAfter=10
+    'WeekdayHeading',
+    parent=styles['Heading2'],
+    fontSize=14,
+    textColor=colors.black,
+    fontName=bold_font,
+    spaceAfter=18,
     )
-    elements.append(Paragraph("Attendance by Weekday", weekday_heading_style))
-    
-    # Weekday statistics table - orange header
-    weekday_data = [['Weekday', 'Attended', 'Total', 'Rate']]
-    for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
-        if day in weekday_stats:
-            stats = weekday_stats[day]
+
+    # --- Pagal savaitės dienas ---
+    weekday_data = [['Diena', 'Dalyvauta', 'Iš viso', 'Procentas']]
+    for wd_idx in range(7):
+        if wd_idx in weekday_stats:
+            stats = weekday_stats[wd_idx]
             percentage = (stats['attended'] / stats['total'] * 100) if stats['total'] > 0 else 0
-            weekday_data.append([day, str(stats['attended']), str(stats['total']), f"{percentage:.0f}%"])
-    
-    if len(weekday_data) > 1:
-        weekday_table = Table(weekday_data, colWidths=[1.5*inch, 1.3*inch, 1.3*inch, 1.3*inch])
-        weekday_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFB366')),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        elements.append(weekday_table)
-        elements.append(Spacer(1, 0.3*inch))
-    
-    # Create two-column layout for "Detailed Attendance Records" heading and pie chart
-    from reportlab.platypus import KeepTogether
-    from reportlab.lib.styles import ParagraphStyle
-    
-    # Detailed heading
-    detail_heading_style = ParagraphStyle(
-        'DetailHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.black,
-        fontName='Helvetica-Bold',
-        spaceAfter=10
-    )
-    
-    # Create pie chart
+            weekday_data.append([LT_WEEKDAYS[wd_idx], str(stats['attended']), str(stats['total']), f"{percentage:.0f}%"])
+    weekday_table = Table(weekday_data, colWidths=[1.8*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+    weekday_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFB366')),
+        ('FONTNAME', (0, 0), (-1, 0), bold_font),
+        ('FONTNAME', (0, 1), (-1, -1), base_font),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    elements.append(Paragraph("Lankomumas pagal savaitės dienas", weekday_heading_style))
+    elements.append(Spacer(1, 0.15*inch))  # + ~11pt tarpas po antraštės
+    elements.append(weekday_table)
+    elements.append(Spacer(1, 0.3*inch))
+
+    # --- Diagrama ---
     fig, ax = plt.subplots(figsize=(4, 4))
-    labels = ['Attended', 'Missed']
+    labels = ['Dalyvauta', 'Praleista']
     sizes = [attended, total_trainings - attended]
-    colors_pie = ['#4A90A4', '#E74C3C']
-    
-    ax.pie(sizes, labels=labels, colors=colors_pie, autopct='%1.1f%%',
-           shadow=False, startangle=90, textprops={'fontsize': 10})
+    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
     ax.axis('equal')
-    
-    # Save chart to buffer
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=100, facecolor='white')
+    plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=100)
     img_buffer.seek(0)
     plt.close()
-    
-    # Create a table to place heading and pie chart side by side
     pie_img = Image(img_buffer, width=2.5*inch, height=2.5*inch)
-    
-    heading_cell = Paragraph("Detailed Attendance<br/>Records", detail_heading_style)
-    
-    layout_table = Table([[heading_cell, pie_img]], colWidths=[3*inch, 3*inch])
-    layout_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-    ]))
+
+    layout_table = Table([[Paragraph("Išsamūs<br/>lankomumo įrašai",
+                                     ParagraphStyle('h3', fontName=bold_font, fontSize=14)), pie_img]],
+                         colWidths=[3*inch, 3*inch])
+    layout_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
     elements.append(layout_table)
     elements.append(Spacer(1, 0.3*inch))
-    
-    # Detailed Attendance Records heading
-    elements.append(Paragraph("Detailed Attendance Records", detail_heading_style))
-    
-    # Detailed attendance list - green header
-    detail_data = [['Date', 'Day', 'Status']]
+
+    # --- Išsamūs įrašai ---
+    detail_data = [['Data', 'Diena', 'Būsena']]
     for date_str in sorted(month_records.keys()):
         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        weekday = calendar.day_name[date_obj.weekday()]
-        status = 'Present' if month_records[date_str] else 'Absent'
-        detail_data.append([date_str, weekday, status])
-    
+        wd_idx = date_obj.weekday()
+        status = 'Buvo' if month_records[date_str] else 'Nebuvo'
+        detail_data.append([date_str, LT_WEEKDAYS[wd_idx], status])
     detail_table = Table(detail_data, colWidths=[2*inch, 2*inch, 2*inch])
     detail_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ('FONTNAME', (0, 0), (-1, 0), bold_font),
+        ('FONTNAME', (0, 1), (-1, -1), base_font),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ]))
     elements.append(detail_table)
-    
-    # Build PDF
+
     doc.build(elements)
-    print(f"\n✓ PDF report generated: {filename}")
+    print(f"\n✓ PDF ataskaita sugeneruota: {filename}")
+
 
 def view_records(attendance):
-    """View all attendance records."""
+    """Parodo visus lankomumo įrašus."""
     if not attendance:
-        print("\nNo records found.")
+        print("\nĮrašų nerasta.")
         return
     
-    print("\n=== All Attendance Records ===")
+    print("\n=== Visi lankomumo įrašai ===")
     for date_str in sorted(attendance.keys()):
-        status = "Present" if attendance[date_str] else "Absent"
+        status = "Buvo" if attendance[date_str] else "Nebuvo"
         print(f"{date_str}: {status}")
     print()
 
 def main():
-    """Main application loop."""
+    """Pagrindinis programos ciklas."""
     print("=" * 50)
-    print("Training Attendance Tracker".center(50))
+    print("Treniruotės lankomumo sekimo programa".center(50))
     print("Rokas Šipkauskas".center(50))
     print("=" * 50)
     
     attendance = load_attendance()
     
     while True:
-        print("\n--- Menu ---")
-        print("1. Add attendance record")
-        print("2. View all records")
-        print("3. Generate PDF report")
-        print("4. Exit")
+        print("\n--- Meniu ---")
+        print("1. Pridėti lankomumo įrašą")
+        print("2. Peržiūrėti visus įrašus")
+        print("3. Sugeneruoti PDF ataskaitą")
+        print("4. Išeiti")
         
-        choice = input("\nSelect an option (1-4): ").strip()
+        choice = input("\nPasirinkite veiksmą (1-4): ").strip()
         
         if choice == '1':
             add_record(attendance)
@@ -303,10 +341,10 @@ def main():
         elif choice == '3':
             generate_pdf_report(attendance)
         elif choice == '4':
-            print("\nGoodbye!")
+            print("\nViso gero!")
             break
         else:
-            print("Invalid option. Please try again.")
+            print("Neteisingas pasirinkimas. Bandykite dar kartą.")
 
 if __name__ == "__main__":
     main()
