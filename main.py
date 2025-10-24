@@ -46,12 +46,7 @@ def register_pdf_fonts():
 # ==== DUOMENYS ====
 
 def load_attendance(filename="attendance.txt"):
-    """Įkelia lankomumo įrašus.
-       Formatai:
-       - YYYY-MM-DD,taip|ne
-       - YYYY-MM-DD,tipas,taip|ne
-       (senas 'varzybos' → konvertuojamas į 'rungtynes')
-    """
+    """Įkelia lankomumo įrašus."""
     attendance = {}
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as f:
@@ -198,7 +193,7 @@ def generate_pdf_report(attendance):
     elements = []
     styles = getSampleStyleSheet()
 
-    # Pavadinimas ir informacija po vardu
+    # --- Viršus ---
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18,
                                  alignment=TA_CENTER, fontName=bold_font, spaceAfter=8)
     elements.append(Paragraph(f"Treniruotės lankomumo ataskaita – {LT_MONTHS[month-1]} {year}", title_style))
@@ -210,7 +205,7 @@ def generate_pdf_report(attendance):
         ParagraphStyle('note', fontName=base_font, fontSize=10, alignment=TA_CENTER, spaceAfter=16, textColor=colors.black)
     ))
 
-    # --- Treniruotės ir Rungtynės (be žodžio „Santrauka“) ---
+    # --- Santraukos (centruotos antraštės) ---
     def summary_table(title_text, total, att, rate):
         data = [
             ['Rodiklis', 'Duomenys'],
@@ -227,18 +222,19 @@ def generate_pdf_report(attendance):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ]))
-        elements.append(Paragraph(title_text, ParagraphStyle('h2', fontName=bold_font, fontSize=15, spaceAfter=8)))
+        elements.append(Paragraph(title_text, ParagraphStyle('h2', fontName=bold_font, fontSize=15,
+                                                             alignment=TA_CENTER, spaceAfter=8)))
         elements.append(tbl)
         elements.append(Spacer(1, 0.25*inch))
 
     summary_table("Treniruotės", t_total, t_att, t_rate)
     summary_table("Rungtynės",   m_total, m_att, m_rate)
 
-    # --- Lentelės pagal savaitės dienas ---
+    # --- Lentelės pagal savaitės dienas (centruotos antraštės) ---
     def weekday_table(title_text, wd_stats):
         elements.append(Paragraph(title_text,
             ParagraphStyle('WeekdayHeading', parent=styles['Heading2'],
-                           fontSize=14, fontName=bold_font, spaceAfter=10)))
+                           fontSize=14, fontName=bold_font, alignment=TA_CENTER, spaceAfter=10)))
         data = [['Diena', 'Dalyvauta', 'Iš viso', 'Procentas']]
         for i in range(7):
             stats = wd_stats.get(i, {'attended': 0, 'total': 0})
@@ -258,7 +254,7 @@ def generate_pdf_report(attendance):
     weekday_table("Lankomumas pagal savaitės dienas – Treniruotės", t_wd)
     weekday_table("Lankomumas pagal savaitės dienas – Rungtynės",   m_wd)
 
-    # --- Diagramos ---
+    # --- Diagramos (centruota antraštė) ---
     def pie(attended, total):
         fig, ax = plt.subplots(figsize=(3.5, 3.5))
         labels = ['Dalyvauta', 'Praleista']
@@ -274,16 +270,19 @@ def generate_pdf_report(attendance):
     caption_style = ParagraphStyle('cap', alignment=TA_CENTER, fontName=bold_font, fontSize=12, spaceAfter=6)
     headers_row = [Paragraph("Treniruotės", caption_style), Paragraph("Rungtynės", caption_style)]
     images_row = [pie(t_att, t_total), pie(m_att, m_total)]
-    elements.append(Paragraph("Diagramos", ParagraphStyle('h2b', fontName=bold_font, fontSize=15, spaceAfter=10)))
+    elements.append(Paragraph("Diagramos",
+                              ParagraphStyle('h2b', fontName=bold_font, fontSize=15,
+                                             alignment=TA_CENTER, spaceAfter=10)))
     elements.append(Table([headers_row, images_row], colWidths=[3*inch, 3*inch],
                           style=TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')])))
 
     elements.append(Spacer(1, 0.35*inch))
 
-    # --- Išsamūs įrašai ---
+    # --- Išsamūs įrašai (centruota antraštė) ---
     elements.append(Paragraph("Išsamūs lankomumo įrašai",
                               ParagraphStyle('DetailHeading', parent=styles['Heading2'],
-                                             fontSize=14, fontName=bold_font, spaceAfter=8)))
+                                             fontSize=14, fontName=bold_font,
+                                             alignment=TA_CENTER, spaceAfter=8)))
     detail_data = [['Data', 'Diena', 'Tipas', 'Būsena']]
     for date_str in sorted(month_records.keys()):
         dt = datetime.strptime(date_str, "%Y-%m-%d")
