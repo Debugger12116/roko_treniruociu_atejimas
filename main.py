@@ -32,7 +32,7 @@ def add_record(attendance):
         print("Invalid date format! Please use YYYY-MM-DD")
         return
     
-    status = input("Was Vardenis Pavardenis present? (yes/no): ").strip().lower()
+    status = input("Was Rokas Šipkauskas present? (yes/no): ").strip().lower()
     
     if status not in ['yes', 'no']:
         print("Please enter 'yes' or 'no'")
@@ -97,7 +97,17 @@ def generate_pdf_report(attendance):
     
     # Create PDF
     filename = f"attendance_report_{year}_{month:02d}.pdf"
-    doc = SimpleDocTemplate(filename, pagesize=letter)
+    
+    # Check if file is open
+    try:
+        with open(filename, 'a'):
+            pass
+    except PermissionError:
+        print(f"\n⚠ Error: {filename} is currently open in another program.")
+        print("Please close the file and try again.")
+        return
+    
+    doc = SimpleDocTemplate(filename, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
     elements = []
     styles = getSampleStyleSheet()
     
@@ -105,115 +115,150 @@ def generate_pdf_report(attendance):
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#2C3E50'),
-        spaceAfter=30,
-        alignment=TA_CENTER
+        fontSize=18,
+        textColor=colors.black,
+        spaceAfter=8,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
     )
-    title = Paragraph(f"Training Attendance Report<br/>{calendar.month_name[month]} {year}", title_style)
+    title = Paragraph(f"Training Attendance Report – {calendar.month_name[month]} {year}", title_style)
     elements.append(title)
-    elements.append(Spacer(1, 0.3*inch))
     
-    # Person name
-    name_style = ParagraphStyle('CustomName', parent=styles['Heading2'], fontSize=16, textColor=colors.HexColor('#34495E'), alignment=TA_CENTER)
-    name = Paragraph("Vardenis Pavardenis", name_style)
+    # Person name in red
+    name_style = ParagraphStyle(
+        'RedName',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.red,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold',
+        spaceAfter=20
+    )
+    name = Paragraph("Rokas Šipkauskas", name_style)
     elements.append(name)
-    elements.append(Spacer(1, 0.4*inch))
     
-    # Summary statistics
+    # Summary statistics table - cyan header
     summary_data = [
-        ['Metric', 'Value'],
+        ['Metric', 'Data'],
         ['Total Trainings', str(total_trainings)],
         ['Attended', str(attended)],
         ['Missed', str(total_trainings - attended)],
         ['Attendance Rate', f"{attendance_rate:.1f}%"]
     ]
     
-    summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+    summary_table = Table(summary_data, colWidths=[3*inch, 2.5*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.cyan),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(summary_table)
-    elements.append(Spacer(1, 0.4*inch))
+    elements.append(Spacer(1, 0.3*inch))
     
-    # Weekday statistics
-    elements.append(Paragraph("Attendance by Weekday", styles['Heading2']))
-    elements.append(Spacer(1, 0.2*inch))
+    # Attendance by Weekday heading
+    weekday_heading_style = ParagraphStyle(
+        'WeekdayHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.black,
+        fontName='Helvetica-Bold',
+        spaceAfter=10
+    )
+    elements.append(Paragraph("Attendance by Weekday", weekday_heading_style))
     
-    weekday_data = [['Weekday', 'Attended', 'Total', 'Percentage']]
+    # Weekday statistics table - orange header
+    weekday_data = [['Weekday', 'Attended', 'Total', 'Rate']]
     for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
         if day in weekday_stats:
             stats = weekday_stats[day]
             percentage = (stats['attended'] / stats['total'] * 100) if stats['total'] > 0 else 0
-            weekday_data.append([day, str(stats['attended']), str(stats['total']), f"{percentage:.1f}%"])
+            weekday_data.append([day, str(stats['attended']), str(stats['total']), f"{percentage:.0f}%"])
     
     if len(weekday_data) > 1:
-        weekday_table = Table(weekday_data, colWidths=[1.5*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+        weekday_table = Table(weekday_data, colWidths=[1.5*inch, 1.3*inch, 1.3*inch, 1.3*inch])
         weekday_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2ECC71')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFB366')),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey)
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         elements.append(weekday_table)
-        elements.append(Spacer(1, 0.4*inch))
+        elements.append(Spacer(1, 0.3*inch))
+    
+    # Create two-column layout for "Detailed Attendance Records" heading and pie chart
+    from reportlab.platypus import KeepTogether
+    from reportlab.lib.styles import ParagraphStyle
+    
+    # Detailed heading
+    detail_heading_style = ParagraphStyle(
+        'DetailHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.black,
+        fontName='Helvetica-Bold',
+        spaceAfter=10
+    )
     
     # Create pie chart
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(4, 4))
     labels = ['Attended', 'Missed']
     sizes = [attended, total_trainings - attended]
-    colors_pie = ['#2ECC71', '#E74C3C']
-    explode = (0.1, 0)
+    colors_pie = ['#4A90A4', '#E74C3C']
     
-    ax.pie(sizes, explode=explode, labels=labels, colors=colors_pie, autopct='%1.1f%%',
-           shadow=True, startangle=90)
+    ax.pie(sizes, labels=labels, colors=colors_pie, autopct='%1.1f%%',
+           shadow=False, startangle=90, textprops={'fontsize': 10})
     ax.axis('equal')
-    plt.title('Attendance Distribution', fontsize=14, fontweight='bold')
     
     # Save chart to buffer
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150)
+    plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=100, facecolor='white')
     img_buffer.seek(0)
     plt.close()
     
-    # Add chart to PDF
-    img = Image(img_buffer, width=4*inch, height=2.67*inch)
-    elements.append(img)
-    elements.append(Spacer(1, 0.4*inch))
+    # Create a table to place heading and pie chart side by side
+    pie_img = Image(img_buffer, width=2.5*inch, height=2.5*inch)
     
-    # Detailed attendance list
-    elements.append(Paragraph("Detailed Attendance Records", styles['Heading2']))
-    elements.append(Spacer(1, 0.2*inch))
+    heading_cell = Paragraph("Detailed Attendance<br/>Records", detail_heading_style)
     
+    layout_table = Table([[heading_cell, pie_img]], colWidths=[3*inch, 3*inch])
+    layout_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+    ]))
+    elements.append(layout_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Detailed Attendance Records heading
+    elements.append(Paragraph("Detailed Attendance Records", detail_heading_style))
+    
+    # Detailed attendance list - green header
     detail_data = [['Date', 'Day', 'Status']]
     for date_str in sorted(month_records.keys()):
         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
         weekday = calendar.day_name[date_obj.weekday()]
-        status = '✓ Present' if month_records[date_str] else '✗ Absent'
+        status = 'Present' if month_records[date_str] else 'Absent'
         detail_data.append([date_str, weekday, status])
     
-    detail_table = Table(detail_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch])
+    detail_table = Table(detail_data, colWidths=[2*inch, 2*inch, 2*inch])
     detail_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9B59B6')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(detail_table)
     
@@ -237,7 +282,7 @@ def main():
     """Main application loop."""
     print("=" * 50)
     print("Training Attendance Tracker".center(50))
-    print("Vardenis Pavardenis".center(50))
+    print("Rokas Šipkauskas".center(50))
     print("=" * 50)
     
     attendance = load_attendance()
