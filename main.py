@@ -196,7 +196,7 @@ def generate_pdf_report(attendance):
     # --- Viršus ---
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18,
                                  alignment=TA_CENTER, fontName=bold_font, spaceAfter=8)
-    elements.append(Paragraph(f"Treniruotės lankomumo ataskaita – {LT_MONTHS[month-1]} {year}", title_style))
+    elements.append(Paragraph(f"Treniruočių lankomumo ataskaita – {LT_MONTHS[month-1]} {year}", title_style))
     elements.append(Paragraph("Rokas Šipkauskas",
                               ParagraphStyle('name', parent=styles['Heading2'], fontName=bold_font,
                                              fontSize=14, textColor=colors.red, alignment=TA_CENTER, spaceAfter=4)))
