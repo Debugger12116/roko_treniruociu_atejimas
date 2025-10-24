@@ -212,7 +212,7 @@ def generate_pdf_report(attendance):
             ['Įvykių skaičius', str(total)],
             ['Dalyvauta', str(att)],
             ['Praleista', str(max(0, total - att))],
-            ['Lankomumo procentas', f"{rate:.1f}%"]
+            ['Lankomumo procentas', f"{rate:.1f} %"]
         ]
         tbl = Table(data, colWidths=[3*inch, 2.5*inch])
         tbl.setStyle(TableStyle([
@@ -239,7 +239,7 @@ def generate_pdf_report(attendance):
         for i in range(7):
             stats = wd_stats.get(i, {'attended': 0, 'total': 0})
             pct = (stats['attended'] / stats['total'] * 100) if stats['total'] else 0
-            data.append([LT_WEEKDAYS[i], str(stats['attended']), str(stats['total']), f"{pct:.0f}%"])
+            data.append([LT_WEEKDAYS[i], str(stats['attended']), str(stats['total']), f"{pct:.0f} %"])
         tbl = Table(data, colWidths=[1.8*inch, 1.2*inch, 1.2*inch, 1.2*inch])
         tbl.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFB366')),
