@@ -13,6 +13,7 @@ LT_WEEKDAYS = [
     "Ketvirtadienis","Penktadienis","Šeštadienis","Sekmadienis"
 ]
 
+
 def register_pdf_fonts():
     """Registruoja PDF šriftus (Calibri -> DejaVuSans -> Helvetica)."""
     from reportlab.pdfbase import pdfmetrics
@@ -47,9 +48,9 @@ def register_pdf_fonts():
 def load_attendance(filename="attendance.txt"):
     """Įkelia lankomumo įrašus.
        Formatai:
-       - YYYY-MM-DD,taip|ne                         (senas – laikomas 'treniruotė')
-       - YYYY-MM-DD,tipas,taip|ne                   (naujas; tipas: 'treniruote' arba 'rungtynes')
-       - Suderinamumas: 'varzybos' -> 'rungtynes'
+       - YYYY-MM-DD,taip|ne
+       - YYYY-MM-DD,tipas,taip|ne
+       (senas 'varzybos' → konvertuojamas į 'rungtynes')
     """
     attendance = {}
     if os.path.exists(filename):
@@ -66,7 +67,7 @@ def load_attendance(filename="attendance.txt"):
                     else:
                         date, typ, status = parts
                         typ = typ.lower()
-                        if typ in ('varzybos',):  # senas pavadinimas
+                        if typ in ('varzybos', 'varžybos'):
                             typ = 'rungtynes'
                         if typ not in ('treniruote', 'rungtynes'):
                             typ = 'treniruote'
@@ -77,7 +78,7 @@ def load_attendance(filename="attendance.txt"):
 
 
 def save_attendance(attendance, filename="attendance.txt"):
-    """Išsaugo nauju formatu: data,tipas,taip|ne (tipas: 'treniruote' | 'rungtynes')."""
+    """Išsaugo nauju formatu: data,tipas,taip|ne."""
     with open(filename, 'w', encoding='utf-8') as f:
         for date, rec in sorted(attendance.items()):
             status = 'taip' if rec['present'] else 'ne'
@@ -94,7 +95,6 @@ def add_record(attendance):
         print("Neteisingas datos formatas! Naudokite YYYY-MM-DD")
         return
 
-    # Tipas: treniruotė ar rungtynės
     typ = input("Koks tipas? (t=treniruotė, r=rungtynės): ").strip().lower()
     if typ in ('t', 'treniruote', 'treniruotė'):
         typ = 'treniruote'
@@ -122,7 +122,7 @@ def generate_pdf_report(attendance):
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
         from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
         import matplotlib.pyplot as plt
@@ -140,8 +140,10 @@ def generate_pdf_report(attendance):
     year = input("Įveskite metus (YYYY): ").strip()
     month = input("Įveskite mėnesį (MM): ").strip()
     try:
-        year = int(year); month = int(month)
-        if not 1 <= month <= 12: raise ValueError
+        year = int(year)
+        month = int(month)
+        if not 1 <= month <= 12:
+            raise ValueError
     except ValueError:
         print("Neteisingi metai arba mėnuo!")
         return
@@ -196,15 +198,19 @@ def generate_pdf_report(attendance):
     elements = []
     styles = getSampleStyleSheet()
 
-    # Pavadinimas
+    # Pavadinimas ir informacija po vardu
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18,
                                  alignment=TA_CENTER, fontName=bold_font, spaceAfter=8)
     elements.append(Paragraph(f"Treniruotės lankomumo ataskaita – {LT_MONTHS[month-1]} {year}", title_style))
     elements.append(Paragraph("Rokas Šipkauskas",
                               ParagraphStyle('name', parent=styles['Heading2'], fontName=bold_font,
-                                             fontSize=14, textColor=colors.red, alignment=TA_CENTER, spaceAfter=20)))
+                                             fontSize=14, textColor=colors.red, alignment=TA_CENTER, spaceAfter=4)))
+    elements.append(Paragraph(
+        "*lankomumas pradėtas skaičiuoti nuo spalio 6 dienos",
+        ParagraphStyle('note', fontName=base_font, fontSize=10, alignment=TA_CENTER, spaceAfter=16, textColor=colors.black)
+    ))
 
-    # --- Santraukos: Treniruotės ir Rungtynės (be žodžio „Santrauka“) ---
+    # --- Treniruotės ir Rungtynės (be žodžio „Santrauka“) ---
     def summary_table(title_text, total, att, rate):
         data = [
             ['Rodiklis', 'Duomenys'],
@@ -228,7 +234,7 @@ def generate_pdf_report(attendance):
     summary_table("Treniruotės", t_total, t_att, t_rate)
     summary_table("Rungtynės",   m_total, m_att, m_rate)
 
-    # --- Lentelės pagal savaitės dienas (abiem tipams) ---
+    # --- Lentelės pagal savaitės dienas ---
     def weekday_table(title_text, wd_stats):
         elements.append(Paragraph(title_text,
             ParagraphStyle('WeekdayHeading', parent=styles['Heading2'],
@@ -252,7 +258,7 @@ def generate_pdf_report(attendance):
     weekday_table("Lankomumas pagal savaitės dienas – Treniruotės", t_wd)
     weekday_table("Lankomumas pagal savaitės dienas – Rungtynės",   m_wd)
 
-    # --- Dvi pyrago diagramos su pavadinimais virš kiekvienos ---
+    # --- Diagramos ---
     def pie(attended, total):
         fig, ax = plt.subplots(figsize=(3.5, 3.5))
         labels = ['Dalyvauta', 'Praleista']
@@ -261,19 +267,20 @@ def generate_pdf_report(attendance):
         ax.axis('equal')
         buf = io.BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight', dpi=110)
-        buf.seek(0); plt.close()
+        buf.seek(0)
+        plt.close()
         return Image(buf, width=2.6*inch, height=2.6*inch)
 
     caption_style = ParagraphStyle('cap', alignment=TA_CENTER, fontName=bold_font, fontSize=12, spaceAfter=6)
     headers_row = [Paragraph("Treniruotės", caption_style), Paragraph("Rungtynės", caption_style)]
-    images_row  = [pie(t_att, t_total), pie(m_att, m_total)]
+    images_row = [pie(t_att, t_total), pie(m_att, m_total)]
     elements.append(Paragraph("Diagramos", ParagraphStyle('h2b', fontName=bold_font, fontSize=15, spaceAfter=10)))
     elements.append(Table([headers_row, images_row], colWidths=[3*inch, 3*inch],
-                          style=TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER')])))
+                          style=TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')])))
 
     elements.append(Spacer(1, 0.35*inch))
 
-    # --- Išsamūs įrašai (su tipu) ---
+    # --- Išsamūs įrašai ---
     elements.append(Paragraph("Išsamūs lankomumo įrašai",
                               ParagraphStyle('DetailHeading', parent=styles['Heading2'],
                                              fontSize=14, fontName=bold_font, spaceAfter=8)))
@@ -316,6 +323,7 @@ def view_records(attendance):
         print(f"{date_str}: {typ} – {status}")
     print()
 
+
 def main():
     """Pagrindinis programos ciklas."""
     print("=" * 50)
@@ -345,6 +353,7 @@ def main():
             break
         else:
             print("Neteisingas pasirinkimas. Bandykite dar kartą.")
+
 
 if __name__ == "__main__":
     main()
