@@ -4,8 +4,9 @@
 2025-10-13,treniruote,ne
 2025-10-15,treniruote,ne
 2025-10-17,treniruote,ne
-2025-10-18,varzybos,ne
+2025-10-18,rungtynes,ne
 2025-10-20,treniruote,ne
 2025-10-22,treniruote,ne
 2025-10-24,treniruote,ne
-2025-10-25,varzybos,ne
+2025-10-25,rungtynes,ne
+2025-10-28,treniruote,ne
