@@ -10,3 +10,4 @@
 2025-10-24,treniruote,ne
 2025-10-25,rungtynes,ne
 2025-10-28,treniruote,ne
+2025-10-30,treniruote,taip
