@@ -257,7 +257,7 @@ def generate_pdf_report(attendance):
     
     if show_note:
         elements.append(Paragraph(
-            "*lankomumas pradėtas skaičiuoti nuo spalio 6 dienos",
+            "*lankomumas pradėtas skaičiuoti nuo 2025 m. spalio 6 dienos",
             ParagraphStyle('note', fontName=base_font, fontSize=10, alignment=TA_CENTER, spaceAfter=16, textColor=colors.black)
         ))
     else:
