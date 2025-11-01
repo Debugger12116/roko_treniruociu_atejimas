@@ -111,7 +111,8 @@ def add_record(attendance):
 # ==== PDF ====
 
 def generate_pdf_report(attendance):
-    """Sugeneruoja PDF ataskaitą (mėnesio / metų / viso laiko) su mėnesinėmis suvestinėmis metams ir visam laikui."""
+    """Sugeneruoja PDF ataskaitą (mėnesio / metų / viso laiko) su mėnesinėmis suvestinėmis metams ir visam laikui.
+       Kiekvienas puslapis numeruojamas apačioje (Puslapis X)."""
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
@@ -130,6 +131,17 @@ def generate_pdf_report(attendance):
         return
 
     base_font, bold_font = register_pdf_fonts()
+
+    # --- Puslapio numeris (footer) ---
+    def draw_page_number(canvas, doc):
+        """Piešia puslapio numerį apačioje centre."""
+        page_num = canvas.getPageNumber()
+        canvas.saveState()
+        canvas.setFont(base_font, 9)
+        x = doc.pagesize[0] / 2.0
+        y = 0.35 * inch
+        canvas.drawCentredString(x, y, f"{page_num}")
+        canvas.restoreState()
 
     # Pasirinkimas
     print("\nPasirinkite ataskaitos tipą:")
@@ -422,7 +434,12 @@ def generate_pdf_report(attendance):
     ]))
     elements.append(detail_table)
 
-    doc.build(elements)
+    # --- Sukuriame PDF su puslapių numeracija ---
+    doc.build(
+        elements,
+        onFirstPage=draw_page_number,
+        onLaterPages=draw_page_number
+    )
     print(f"\n✓ PDF ataskaita sugeneruota: {filename}")
 
 
