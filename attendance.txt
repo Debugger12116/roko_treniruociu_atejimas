@@ -17,3 +17,5 @@
 2025-11-06,treniruote,ne
 2025-11-07,treniruote,ne
 2025-11-11,treniruote,taip
+2025-11-13,treniruote,taip
+2025-11-14,treniruote,ne
