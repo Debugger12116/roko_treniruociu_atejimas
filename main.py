@@ -111,36 +111,27 @@ def add_record(attendance):
 # ==== PDF ====
 
 def generate_pdf_report(attendance):
-    """Sugeneruoja PDF ataskaitą (mėnesio / metų / viso laiko) su mėnesinėmis suvestinėmis metams ir visam laikui.
-       Kiekvienas puslapis numeruojamas apačioje (Puslapis X)."""
+    """Sugeneruoja PDF ataskaitą (be diagramų)."""
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
         from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
-
-        import matplotlib
-        matplotlib.use("Agg")  # saugus piešimas
-        import matplotlib.pyplot as plt
-        import io
     except ImportError:
         print("\n⚠ Trūksta reikalingų bibliotekų!")
-        print("Įdiekite: pip install reportlab matplotlib")
+        print("Įdiekite: pip install reportlab")
         return
 
     base_font, bold_font = register_pdf_fonts()
 
-    # --- Puslapio numeris (footer) ---
+    # --- Puslapio numeris ---
     def draw_page_number(canvas, doc):
-        """Piešia puslapio numerį apačioje centre."""
         page_num = canvas.getPageNumber()
         canvas.saveState()
         canvas.setFont(base_font, 9)
-        x = doc.pagesize[0] / 2.0
-        y = 0.35 * inch
-        canvas.drawCentredString(x, y, f"{page_num}")
+        canvas.drawCentredString(doc.pagesize[0] / 2.0, 0.35 * inch, f"{page_num}")
         canvas.restoreState()
 
     # Pasirinkimas
@@ -153,14 +144,14 @@ def generate_pdf_report(attendance):
     if report_type not in ['1', '2', '3']:
         print("Neteisingas pasirinkimas!")
         return
-    
+
     year = None
     month = None
     period_title = ""
     filename_suffix = ""
     show_note = False
-    
-    if report_type == '1':  # Mėnesio ataskaita
+
+    if report_type == '1':  
         year_input = input("Įveskite metus (YYYY): ").strip()
         month_input = input("Įveskite mėnesį (MM): ").strip()
         try:
@@ -171,41 +162,43 @@ def generate_pdf_report(attendance):
         except ValueError:
             print("Neteisingi metai arba mėnuo!")
             return
+
         period_title = f"{LT_MONTHS[month-1]} {year}"
         filename_suffix = f"{year}_{month:02d}"
         if year == 2025 and month == 10:
             show_note = True
-            
-    elif report_type == '2':  # Metų ataskaita
+
+    elif report_type == '2':  
         year_input = input("Įveskite metus (YYYY): ").strip()
         try:
             year = int(year_input)
         except ValueError:
             print("Neteisingi metai!")
             return
+
         period_title = f"{year} metai"
         filename_suffix = f"{year}"
-        
-    else:  # Viso laiko ataskaita
+
+    else:  
         period_title = "Viso laiko"
         filename_suffix = "viso_laiko"
         show_note = True
 
-    # Filtruojame įrašus pagal periodą
+    # Filtruojame
     month_records = {}
     for date_str, rec in attendance.items():
         try:
             date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
+        except:
             continue
-        
-        if report_type == '1':  # Mėnuo
+
+        if report_type == '1':
             if date_obj.year == year and date_obj.month == month:
                 month_records[date_str] = rec
-        elif report_type == '2':  # Metai
+        elif report_type == '2':
             if date_obj.year == year:
                 month_records[date_str] = rec
-        else:  # Visas laikas
+        else:
             month_records[date_str] = rec
 
     if not month_records:
@@ -214,7 +207,7 @@ def generate_pdf_report(attendance):
 
     # Skirstom į tipus
     def filter_by_type(t):
-        return {d: r for d, r in month_records.items() if r.get('type') == t}
+        return {d: r for d, r in month_records.items() if r['type'] == t}
 
     rec_train = filter_by_type('treniruote')
     rec_match = filter_by_type('rungtynes')
@@ -232,50 +225,34 @@ def generate_pdf_report(attendance):
                 wd[idx]['attended'] += 1
         return total, attended, rate, wd
 
-    def aggregate_monthly(records):
-        """Grąžina dict[(year, month)] -> {'total': x, 'att': y}"""
-        agg = defaultdict(lambda: {'total': 0, 'att': 0})
-        for date_str, r in records.items():
-            dt = datetime.strptime(date_str, "%Y-%m-%d")
-            key = (dt.year, dt.month)
-            agg[key]['total'] += 1
-            if r['present']:
-                agg[key]['att'] += 1
-        return agg
-
     t_total, t_att, t_rate, t_wd = compute_stats(rec_train)
     m_total, m_att, m_rate, m_wd = compute_stats(rec_match)
 
-    # PDF paruošimas
+    # PDF setup
     filename = f"lankomumo_ataskaita_{filename_suffix}.pdf"
-    try:
-        with open(filename, 'a'):
-            pass
-    except PermissionError:
-        print(f"\n⚠ Klaida: {filename} šiuo metu atidarytas.")
-        return
 
     doc = SimpleDocTemplate(filename, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
     elements = []
     styles = getSampleStyleSheet()
 
-    # --- Viršus ---
+    # --- Header ---
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18,
                                  alignment=TA_CENTER, fontName=bold_font, spaceAfter=8)
     elements.append(Paragraph(f"Treniruočių lankomumo ataskaita – {period_title}", title_style))
     elements.append(Paragraph("Rokas Šipkauskas",
                               ParagraphStyle('name', parent=styles['Heading2'], fontName=bold_font,
                                              fontSize=14, textColor=colors.red, alignment=TA_CENTER, spaceAfter=4)))
-    
+
     if show_note:
         elements.append(Paragraph(
             "*lankomumas pradėtas skaičiuoti nuo 2025 m. spalio 6 dienos",
-            ParagraphStyle('note', fontName=base_font, fontSize=10, alignment=TA_CENTER, spaceAfter=16, textColor=colors.black)
+            ParagraphStyle('note', fontName=base_font, fontSize=10, alignment=TA_CENTER,
+                           spaceAfter=16, textColor=colors.black)
         ))
     else:
         elements.append(Spacer(1, 0.15*inch))
 
-    # --- Santraukos ---
+    # --- Summary table ---
     def summary_table(title_text, total, att, rate):
         data = [
             ['Rodiklis', 'Duomenys'],
@@ -292,20 +269,23 @@ def generate_pdf_report(attendance):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ]))
-        elements.append(Paragraph(title_text, ParagraphStyle('h2', fontName=bold_font, fontSize=15,
-                                                             alignment=TA_CENTER, spaceAfter=8)))
+        elements.append(Paragraph(title_text,
+                                  ParagraphStyle('h2', fontName=bold_font, fontSize=15,
+                                                 alignment=TA_CENTER, spaceAfter=8)))
         elements.append(tbl)
         elements.append(Spacer(1, 0.25*inch))
 
     summary_table("Treniruotės", t_total, t_att, t_rate)
     summary_table("Rungtynės",   m_total, m_att, m_rate)
 
-    # --- Lentelės pagal savaitės dienas ---
+    # --- Weekday tables ---
     def weekday_table(title_text, wd_stats):
         elements.append(Paragraph(title_text,
             ParagraphStyle('WeekdayHeading', parent=styles['Heading2'],
-                           fontSize=14, fontName=bold_font, alignment=TA_CENTER, spaceAfter=10)))
+                           fontSize=14, fontName=bold_font,
+                           alignment=TA_CENTER, spaceAfter=10)))
         data = [['Diena', 'Dalyvauta', 'Iš viso', 'Procentas']]
+
         for i in range(7):
             stats = wd_stats.get(i, {'attended': 0, 'total': 0})
             pct = (stats['attended'] / stats['total'] * 100) if stats['total'] else 0
@@ -324,17 +304,16 @@ def generate_pdf_report(attendance):
     weekday_table("Lankomumas pagal savaitės dienas – Treniruotės", t_wd)
     weekday_table("Lankomumas pagal savaitės dienas – Rungtynės",   m_wd)
 
-    # --- Mėnesinės suvestinės (tik Metų arba Viso laiko) ---
+    # --- Monthly summary ---
     def monthly_table(title_text, monthly_agg, for_year=None):
-        """monthly_agg: dict[(y,m)] -> {'total','att'}; for_year: int arba None"""
         elements.append(Paragraph(title_text,
             ParagraphStyle('MonthlyHeading', parent=styles['Heading2'],
-                           fontSize=14, fontName=bold_font, alignment=TA_CENTER, spaceAfter=10)))
+                           fontSize=14, fontName=bold_font,
+                           alignment=TA_CENTER, spaceAfter=10)))
         data = [['Mėnuo', 'Įvykių sk.', 'Dalyvauta', 'Praleista', 'Procentas']]
 
         rows = []
-        if for_year is not None:
-            # Rodyti VISUS 12 mėn. nurodytais metais
+        if for_year:
             for m in range(1, 13):
                 key = (for_year, m)
                 tot = monthly_agg.get(key, {'total': 0, 'att': 0})['total']
@@ -343,7 +322,6 @@ def generate_pdf_report(attendance):
                 rate = (att / tot * 100) if tot else 0.0
                 rows.append([LT_MONTHS[m-1], str(tot), str(att), str(missed), f"{rate:.1f} %"])
         else:
-            # Visi periodai, kuriuose yra duomenų (chronologiškai)
             for (y, m) in sorted(monthly_agg.keys()):
                 tot = monthly_agg[(y, m)]['total']
                 att = monthly_agg[(y, m)]['att']
@@ -365,88 +343,61 @@ def generate_pdf_report(attendance):
         elements.append(Spacer(1, 0.3*inch))
 
     if report_type in ('2', '3'):
-        # Apskaičiuojame mėnesines suvestines treniruotėms ir rungtynėms
-        monthly_train = aggregate_monthly(rec_train)
-        monthly_match = aggregate_monthly(rec_match)
+        monthly_train = defaultdict(lambda: {'total': 0, 'att': 0})
+        monthly_match = defaultdict(lambda: {'total': 0, 'att': 0})
+
+        for date_str, r in rec_train.items():
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            monthly_train[(dt.year, dt.month)]['total'] += 1
+            if r['present']:
+                monthly_train[(dt.year, dt.month)]['att'] += 1
+
+        for date_str, r in rec_match.items():
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            monthly_match[(dt.year, dt.month)]['total'] += 1
+            if r['present']:
+                monthly_match[(dt.year, dt.month)]['att'] += 1
 
         if report_type == '2':
             monthly_table("Mėnesinė suvestinė – Treniruotės", monthly_train, for_year=year)
-            monthly_table("Mėnesinė suvestinė – Rungtynės",   monthly_match, for_year=year)
+            monthly_table("Mėnesinė suvestinė – Rungtynės", monthly_match, for_year=year)
         else:
-            monthly_table("Mėnesinė suvestinė (viso laiko) – Treniruotės", monthly_train, for_year=None)
-            monthly_table("Mėnesinė suvestinė (viso laiko) – Rungtynės",   monthly_match, for_year=None)
+            monthly_table("Mėnesinė suvestinė (viso laiko) – Treniruotės", monthly_train)
+            monthly_table("Mėnesinė suvestinė (viso laiko) – Rungtynės", monthly_match)
 
-    # --- Diagramos ---
-    def pie(attended, total):
-        """Grąžina Image su skrituline diagrama arba 'Nėra duomenų' paveikslėliu, jei total == 0."""
-        fig, ax = plt.subplots(figsize=(3.5, 3.5))
-        if total == 0:
-            ax.axis('off')
-            ax.text(0.5, 0.5, "Nėra duomenų", ha='center', va='center', fontsize=12)
-        else:
-            labels = ['Dalyvauta', 'Praleista']
-            sizes = [attended, max(0, total - attended)]
-            if sum(sizes) == 0:
-                ax.axis('off')
-                ax.text(0.5, 0.5, "Nėra duomenų", ha='center', va='center', fontsize=12)
-            else:
-                ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-                ax.axis('equal')
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=110)
-        buf.seek(0)
-        plt.close()
-        return Image(buf, width=2.6*inch, height=2.6*inch)
-
-    elements.append(Paragraph("Diagramos",
-                              ParagraphStyle('h2b', fontName=bold_font, fontSize=15,
-                                             alignment=TA_CENTER, spaceAfter=10)))
-    caption_style = ParagraphStyle('cap', alignment=TA_CENTER, fontName=bold_font, fontSize=12, spaceAfter=6)
-    headers_row = [Paragraph("Treniruotės", caption_style), Paragraph("Rungtynės", caption_style)]
-    images_row = [pie(t_att, t_total), pie(m_att, m_total)]
-    elements.append(Table([headers_row, images_row], colWidths=[3*inch, 3*inch],
-                          style=TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')])))
-
-    elements.append(Spacer(1, 0.35*inch))
-
-    # --- Išsamūs įrašai ---
+    # --- Details ---
     elements.append(Paragraph("Išsamūs lankomumo įrašai",
                               ParagraphStyle('DetailHeading', parent=styles['Heading2'],
                                              fontSize=14, fontName=bold_font,
                                              alignment=TA_CENTER, spaceAfter=8)))
+
     detail_data = [['Data', 'Diena', 'Tipas', 'Būsena']]
     for date_str in sorted(month_records.keys()):
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         wd = LT_WEEKDAYS[dt.weekday()]
-        typ = month_records[date_str].get('type', 'treniruote')
-        typ_lt = 'Treniruotė' if typ == 'treniruote' else 'Rungtynės'
+        typ = 'Treniruotė' if month_records[date_str]['type'] == 'treniruote' else 'Rungtynės'
         status = 'Buvo' if month_records[date_str]['present'] else 'Nebuvo'
-        detail_data.append([date_str, wd, typ_lt, status])
+        detail_data.append([date_str, wd, typ, status])
 
-    from reportlab.platypus import Table  # garantuotai importuota
-    detail_table = Table(detail_data, colWidths=[1.6*inch, 1.6*inch, 1.6*inch, 1.6*inch])
+    detail_table = Table(detail_data, colWidths=[1.6*inch] * 4)
     detail_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),
         ('FONTNAME', (0, 0), (-1, 0), bold_font),
         ('FONTNAME', (0, 1), (-1, -1), base_font),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
     ]))
+
     elements.append(detail_table)
 
-    # --- Sukuriame PDF su puslapių numeracija ---
-    doc.build(
-        elements,
-        onFirstPage=draw_page_number,
-        onLaterPages=draw_page_number
-    )
+    # Build PDF
+    doc.build(elements, onFirstPage=draw_page_number, onLaterPages=draw_page_number)
+
     print(f"\n✓ PDF ataskaita sugeneruota: {filename}")
 
 
 # ==== PERŽIŪRA & UI ====
 
 def view_records(attendance):
-    """Parodo visus lankomumo įrašus."""
     if not attendance:
         print("\nĮrašų nerasta.")
         return
@@ -455,13 +406,12 @@ def view_records(attendance):
     for date_str in sorted(attendance.keys()):
         rec = attendance[date_str]
         status = "Buvo" if rec['present'] else "Nebuvo"
-        typ = "Treniruotė" if rec.get('type') == 'treniruote' else "Rungtynės"
+        typ = "Treniruotė" if rec['type'] == 'treniruote' else "Rungtynės"
         print(f"{date_str}: {typ} – {status}")
     print()
 
 
 def main():
-    """Pagrindinis programos ciklas."""
     print("=" * 50)
     print("Treniruotės lankomumo sekimo programa".center(50))
     print("Rokas Šipkauskas".center(50))
