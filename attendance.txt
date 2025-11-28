@@ -22,3 +22,6 @@
 2025-11-18,treniruote,taip
 2025-11-20,rungtynes,taip
 2025-11-21,rungtynes,taip
+2025-11-25,treniruote,ne
+2025-11-27,rungtynes,ne
+2025-11-28,treniruote,ne
