@@ -25,3 +25,6 @@
 2025-11-25,treniruote,ne
 2025-11-27,rungtynes,ne
 2025-11-28,treniruote,ne
+2025-12-02,treniruote,ne
+2025-12-04,rungtynes,ne
+2025-12-05,treniruote,ne
